@@ -33,6 +33,16 @@ function App() {
   const [notice, setNotice] = useState('')
 
   useEffect(() => {
+    if (!notice) return
+
+    const timer = setTimeout(() => {
+      setNotice('')
+    }, 3000)
+
+    return () => clearTimeout(timer)
+  }, [notice])
+
+  useEffect(() => {
     const loadTasks = async () => {
       try {
         const response = await fetch(API_URL)
