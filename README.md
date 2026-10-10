@@ -176,7 +176,7 @@ npm run lint
 npm run build
 ```
 
-## CodeZero AI assistance
+## AI Development Experience
 
 CodeZero AI was used as a development assistant for focused, reviewed implementation work in this project. The Git history reflects the completed work, including:
 
