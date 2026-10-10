@@ -3,6 +3,7 @@ require('dotenv').config()
 const cors = require('cors')
 const express = require('express')
 const mongoose = require('mongoose')
+const taskRoutes = require('./routes/taskRoutes')
 
 const app = express()
 const PORT = process.env.PORT || 5000
@@ -20,6 +21,8 @@ app.get('/api/health', (req, res) => {
     message: 'Server is healthy',
   })
 })
+
+app.use('/api/tasks', taskRoutes)
 
 const startServer = async () => {
   try {
