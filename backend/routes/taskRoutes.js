@@ -5,6 +5,58 @@ const Task = require('../models/Task')
 const router = express.Router()
 
 const isValidTaskId = (id) => mongoose.Types.ObjectId.isValid(id)
+const allowedTaskFields = ['title', 'description', 'status']
+const allowedStatuses = ['pending', 'in-progress', 'completed']
+
+const validateTaskData = (data, { isUpdate = false } = {}) => {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    return ['Task data must be a JSON object']
+  }
+
+  const fields = Object.keys(data)
+  const errors = fields
+    .filter((field) => !allowedTaskFields.includes(field))
+    .map((field) => `Unexpected field: ${field}`)
+
+  if (isUpdate && fields.length === 0) {
+    errors.push('Provide at least one task field to update')
+  }
+
+  if (!isUpdate && !Object.hasOwn(data, 'title')) {
+    errors.push('Title is required')
+  }
+
+  if (Object.hasOwn(data, 'title')) {
+    if (typeof data.title !== 'string') {
+      errors.push('Title must be a string')
+    } else if (!data.title.trim()) {
+      errors.push('Title cannot be empty')
+    } else if (data.title.trim().length > 160) {
+      errors.push('Title cannot exceed 160 characters')
+    }
+  }
+
+  if (Object.hasOwn(data, 'description') && typeof data.description !== 'string') {
+    errors.push('Description must be a string')
+  }
+
+  if (Object.hasOwn(data, 'status')) {
+    if (typeof data.status !== 'string') {
+      errors.push('Status must be a string')
+    } else if (!allowedStatuses.includes(data.status)) {
+      errors.push('Status must be pending, in-progress, or completed')
+    }
+  }
+
+  return errors
+}
+
+const sendValidationError = (res, errors) =>
+  res.status(400).json({
+    success: false,
+    message: 'Validation failed',
+    errors,
+  })
 
 const sendDatabaseError = (error, res) => {
   console.error('Task API error:', error)
@@ -30,6 +82,11 @@ const sendInvalidId = (res) =>
   })
 
 router.post('/', async (req, res) => {
+  const errors = validateTaskData(req.body)
+  if (errors.length) {
+    return sendValidationError(res, errors)
+  }
+
   try {
     const task = await Task.create(req.body)
 
@@ -82,6 +139,11 @@ router.get('/:id', async (req, res) => {
 router.put('/:id', async (req, res) => {
   if (!isValidTaskId(req.params.id)) {
     return sendInvalidId(res)
+  }
+
+  const errors = validateTaskData(req.body, { isUpdate: true })
+  if (errors.length) {
+    return sendValidationError(res, errors)
   }
 
   try {
