@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import './App.css'
 
-const API_URL = 'http://localhost:5001/api/tasks'
+const API_BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:5001').replace(/\/$/, '')
+const API_URL = `${API_BASE_URL}/api/tasks`
 const initialForm = { title: '', description: '', status: 'pending' }
 
 const statusLabels = {
@@ -15,12 +16,26 @@ const getErrorMessage = async (response) => {
   return body?.errors?.join(' ') || body?.message || 'Something went wrong.'
 }
 
-const formatDate = (value) =>
-  new Intl.DateTimeFormat('en', {
+const fetchTasks = async () => {
+  const response = await fetch(API_URL)
+  if (!response.ok) throw new Error(await getErrorMessage(response))
+
+  const result = await response.json()
+  return result.data || []
+}
+
+const formatDate = (value) => {
+  if (!value) return 'date unavailable'
+
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return 'date unavailable'
+
+  return new Intl.DateTimeFormat('en', {
     day: 'numeric',
     month: 'short',
     year: 'numeric',
-  }).format(new Date(value))
+  }).format(date)
+}
 
 function App() {
   const [tasks, setTasks] = useState([])
@@ -30,6 +45,7 @@ function App() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [deletingId, setDeletingId] = useState(null)
   const [error, setError] = useState('')
+  const [loadError, setLoadError] = useState('')
   const [notice, setNotice] = useState('')
 
   useEffect(() => {
@@ -43,22 +59,40 @@ function App() {
   }, [notice])
 
   useEffect(() => {
-    const loadTasks = async () => {
-      try {
-        const response = await fetch(API_URL)
-        if (!response.ok) throw new Error(await getErrorMessage(response))
+    let isCurrent = true
 
-        const result = await response.json()
-        setTasks(result.data || [])
-      } catch (requestError) {
-        setError(requestError.message || 'Unable to load tasks. Check that the backend is running.')
-      } finally {
-        setIsLoading(false)
-      }
+    fetchTasks()
+      .then((loadedTasks) => {
+        if (!isCurrent) return
+
+        setTasks(loadedTasks)
+        setLoadError('')
+      })
+      .catch((requestError) => {
+        if (isCurrent) setLoadError(requestError.message || 'Unable to load tasks. Check that the backend is running.')
+      })
+      .finally(() => {
+        if (isCurrent) setIsLoading(false)
+      })
+
+    return () => {
+      isCurrent = false
     }
-
-    loadTasks()
   }, [])
+
+  const retryLoadTasks = async () => {
+    setIsLoading(true)
+
+    try {
+      const loadedTasks = await fetchTasks()
+      setTasks(loadedTasks)
+      setLoadError('')
+    } catch (requestError) {
+      setLoadError(requestError.message || 'Unable to load tasks. Check that the backend is running.')
+    } finally {
+      setIsLoading(false)
+    }
+  }
 
   const handleChange = (event) => {
     const { name, value } = event.target
@@ -72,6 +106,8 @@ function App() {
 
   const handleSubmit = async (event) => {
     event.preventDefault()
+    if (isSubmitting) return
+
     setError('')
     setNotice('')
 
@@ -115,6 +151,8 @@ function App() {
   }
 
   const deleteTask = async (task) => {
+    if (deletingId) return
+
     if (!window.confirm(`Delete “${task.title}”? This cannot be undone.`)) return
 
     setDeletingId(task._id)
@@ -172,7 +210,12 @@ function App() {
 
           <section className="task-list-panel" aria-labelledby="tasks-title">
             <div className="list-heading"><p className="eyebrow">Your work</p><h2 id="tasks-title">All tasks <span>{tasks.length}</span></h2></div>
-            {error && <p className="feedback error" role="alert">{error}</p>}
+            {(loadError || error) && (
+              <div className="feedback error" role="alert">
+                <p>{loadError || error}</p>
+                {loadError && <button className="text-button" type="button" onClick={retryLoadTasks} disabled={isLoading}>Retry</button>}
+              </div>
+            )}
             {notice && <p className="feedback success" role="status">{notice}</p>}
             {isLoading ? (
               <div className="state-card" role="status"><span className="loader" aria-hidden="true" /><p>Loading your tasks…</p></div>
